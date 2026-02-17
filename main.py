@@ -2,34 +2,16 @@
 
 # This example shows how to use pygame to build a graphic frontend for
 #  a karaoke application.
-# Requires: pygame.
+# Requires: pygame, timidity++ (for MIDI playback)
 
-import midifile, time, datetime, sys
+import midifile, time, datetime, sys, subprocess, os, signal
 import pygame
 
-try:
-    # for Python2
-    import Tkinter as tk
-    import tkFileDialog as filedialog
-    root = tk.Tk()
-    root.withdraw()
-except ImportError:
-    # for Python3
-    from tkinter import *
-    from tkinter import filedialog
-    root = tk.Tk()
-    root.withdraw()
+if len(sys.argv) < 2:
+    print("Usage: python main.py <karaoke_file.kar>")
+    sys.exit(1)
 
-karaoke_file = ''
-
-def open_file_dialog():
-    global karaoke_file
-    karaoke_file = filedialog.askopenfilename(filetypes=(("Karaoke Files", ".kar .midi"), ("All Files", "*.*")))
-
-open_file_dialog()
-
-# filename = raw_input('Please enter filename of .mid or .kar file:')
-# karaoke_file = "dust_in_the_wind_karaoke_songs_NifterDotCom.kar"
+karaoke_file = sys.argv[1]
 
 pygame.init()
 screenx = 1200
@@ -47,25 +29,37 @@ base_text_color = white
 m = midifile.midifile()
 m.load_file(karaoke_file)
 
-pygame.mixer.init()
-pygame.mixer.music.load(karaoke_file)
-pygame.mixer.music.play(0, 0)  # Start song at 0 and don't loop
-start = datetime.datetime.now()
+# Start timidity subprocess for MIDI playback
+# This handles .kar files that fluidsynth can't play
+timidity_proc = subprocess.Popen(
+    ["timidity", "-Ow", "-o", "-", karaoke_file],
+    stdout=subprocess.PIPE,
+    stderr=subprocess.DEVNULL,
+    bufsize=0,
+)
 
+# Give timidity a moment to start producing audio
+time.sleep(0.5)
+
+# Play the piped audio through aplay (PulseAudio compatible)
+aplay_proc = subprocess.Popen(
+    ["aplay", "-"], stdin=timidity_proc.stdout, stderr=subprocess.DEVNULL
+)
+
+start = datetime.datetime.now()
 done = False
 
 if not m.karfile:
-    print "This is not a karaoke file. I'll just play it"
-    while pygame.mixer.music.get_busy():
+    print("This is not a karaoke file. I'll just play it")
+    while timidity_proc.poll() is None:
         time.sleep(1)
     sys.exit(0)
 
 start = start - datetime.timedelta(0, 9)  # To start lyrics at a later point
-dt = 0.
+dt = 0.0
 
 # Main event loop
-while pygame.mixer.music.get_busy() and not done:
-
+while timidity_proc.poll() is None and not done:
     # todo: space to pause
 
     for event in pygame.event.get():
@@ -77,7 +71,7 @@ while pygame.mixer.music.get_busy() and not done:
 
     for iline in range(3):
         l = font.size(m.karlinea[iline] + m.karlineb[iline])[0]
-        x0a = screenx / 2 - l / 2.
+        x0a = screenx / 2 - l / 2.0
         line_a = font.render(m.karlinea[iline], 0, active_text_color)
         line_b = font.render(m.karlineb[iline], 0, base_text_color)
         rect_a = screen.blit(line_a, [x0a, 80 + iline * 60])
@@ -87,6 +81,9 @@ while pygame.mixer.music.get_busy() and not done:
     pygame.display.flip()
     screen.fill(0)
 
-    time.sleep(.1)
+    time.sleep(0.1)
 
+# Cleanup
+timidity_proc.terminate()
+aplay_proc.terminate()
 pygame.quit()
