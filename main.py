@@ -7,35 +7,11 @@
 import midifile, time, datetime, sys
 import pygame
 
-try:
-    # for Python2
-    import Tkinter as tk
-    import tkFileDialog as filedialog
+if len(sys.argv) < 2:
+    print("Usage: python main.py <karaoke_file.kar>")
+    sys.exit(1)
 
-    root = tk.Tk()
-    root.withdraw()
-except ImportError:
-    # for Python3
-    from tkinter import *
-    from tkinter import filedialog
-
-    root = tk.Tk()
-    root.withdraw()
-
-karaoke_file = ""
-
-
-def open_file_dialog():
-    global karaoke_file
-    karaoke_file = filedialog.askopenfilename(
-        filetypes=(("Karaoke Files", ".kar .midi"), ("All Files", "*.*"))
-    )
-
-
-open_file_dialog()
-
-# filename = raw_input('Please enter filename of .mid or .kar file:')
-# karaoke_file = "dust_in_the_wind_karaoke_songs_NifterDotCom.kar"
+karaoke_file = sys.argv[1]
 
 pygame.init()
 screenx = 1200
