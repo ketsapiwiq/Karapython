@@ -141,7 +141,6 @@ class midifile:
     """
 
     def __init__(self):
-
         # Instance attributes
         self.fileobject = None
         self.closeonreturn = False
@@ -173,9 +172,14 @@ class midifile:
         read = 129
         values = list()
         while read > 0b10000000:
-            read = struct.unpack(">B", self.fileobject.read(1))[0]
+            byte_data = self.fileobject.read(1)
+            if not byte_data:
+                return [0, 1, b""]
+            read = struct.unpack(">B", byte_data)[0]
             values.append(read)
         iread = len(values)
+        if iread == 0:
+            return [0, 1, b""]
         var = values[iread - 1]  # Least-significant byte
         for i in range(iread - 1):
             var = var + (values[i] - 128) * (128 ** (iread - 1 - i))
@@ -185,14 +189,13 @@ class midifile:
         return [var, iread, bytesread]  # Return value and number of bytes read
 
     def load_file(self, fileobject):
-
         if type(fileobject) == str:
             self.fileobject = open(fileobject, "rb")
             self.closeonreturn = True
         else:
             self.fileobject = fileobject
 
-        headerid = str(self.fileobject.read(4))
+        headerid = self.fileobject.read(4)
         headerlen = struct.unpack(">I", self.fileobject.read(4))[
             0
         ]  # > is for big-endian, i for integer
@@ -212,7 +215,7 @@ class midifile:
         for itrack in range(self.ntracks):
             currentpatch = 0
             mastertime = 0
-            trackid = str(self.fileobject.read(4))
+            trackid = self.fileobject.read(4)
             tracklen = struct.unpack(">I", self.fileobject.read(4))[0]
             # track event
             metatype = 0
@@ -276,6 +279,10 @@ class midifile:
                     data = self.fileobject.read(l)
                     iread = iread + l
 
+                    # Decode bytes to string for text meta events (Python3 compatibility)
+                    if metatype in (0x1, 0x3):
+                        data = data.decode("latin-1")
+
                     if metatype == 0x51:  # Set tempo
                         tt = struct.unpack(">BBB", data)
                         self.microsecondsperquarternote.append(
@@ -336,7 +343,7 @@ class midifile:
                         status = runningstatus
                         self.fileobject.seek(-1, 1)
                         iread = iread - 1
-                    status1 = status / 16
+                    status1 = status // 16
                     status2 = status % 16
                     channel = status2
 
