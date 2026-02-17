@@ -1,10 +1,6 @@
 #!/usr/bin/env python
 
-# This example shows how to use pygame to build a graphic frontend for
-#  a karaoke application.
-# Requires: pygame, timidity++ (for MIDI playback)
-
-import midifile, time, datetime, sys, subprocess, os, signal
+import midifile, time, sys, subprocess, tempfile, os
 import pygame
 
 if len(sys.argv) < 2:
@@ -29,61 +25,56 @@ base_text_color = white
 m = midifile.midifile()
 m.load_file(karaoke_file)
 
-# Start timidity subprocess for MIDI playback
-# This handles .kar files that fluidsynth can't play
-timidity_proc = subprocess.Popen(
-    ["timidity", "-Ow", "-o", "-", karaoke_file],
-    stdout=subprocess.PIPE,
-    stderr=subprocess.DEVNULL,
-    bufsize=0,
-)
+with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+    tmp_wav = tmp.name
 
-# Give timidity a moment to start producing audio
-time.sleep(0.5)
+try:
+    print("Rendering MIDI to audio...")
+    subprocess.run(
+        ["timidity", "-Ow", "-o", tmp_wav, karaoke_file],
+        capture_output=True,
+        check=True,
+    )
 
-# Play the piped audio through aplay (PulseAudio compatible)
-aplay_proc = subprocess.Popen(
-    ["aplay", "-"], stdin=timidity_proc.stdout, stderr=subprocess.DEVNULL
-)
+    pygame.mixer.init()
+    pygame.mixer.music.load(tmp_wav)
+    pygame.mixer.music.play()
 
-start = datetime.datetime.now()
-done = False
+    print("Playing...")
 
-if not m.karfile:
-    print("This is not a karaoke file. I'll just play it")
-    while timidity_proc.poll() is None:
-        time.sleep(1)
-    sys.exit(0)
+    done = False
 
-start = start - datetime.timedelta(0, 9)  # To start lyrics at a later point
-dt = 0.0
+    if not m.karfile:
+        print("This is not a karaoke file. I'll just play it")
+        while pygame.mixer.music.get_busy():
+            time.sleep(1)
+        sys.exit(0)
 
-# Main event loop
-while timidity_proc.poll() is None and not done:
-    # todo: space to pause
+    while pygame.mixer.music.get_busy() and not done:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                done = True
 
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            done = True
+        dt = pygame.mixer.music.get_pos() / 1000.0
+        m.update_karaoke(dt)
 
-    dt = (datetime.datetime.now() - start).total_seconds()
-    m.update_karaoke(dt)
+        # Render the three karaoke lines
+        for iline in range(3):
+            l = font.size(m.karlinea[iline] + m.karlineb[iline])[0]
+            x0a = screenx / 2 - l / 2.0
+            line_a = font.render(m.karlinea[iline], 0, active_text_color)
+            line_b = font.render(m.karlineb[iline], 0, base_text_color)
+            rect_a = screen.blit(line_a, [x0a, 80 + iline * 60])
+            x0b = x0a + rect_a.width
+            rect_b = screen.blit(line_b, [x0b, 80 + iline * 60])
 
-    for iline in range(3):
-        l = font.size(m.karlinea[iline] + m.karlineb[iline])[0]
-        x0a = screenx / 2 - l / 2.0
-        line_a = font.render(m.karlinea[iline], 0, active_text_color)
-        line_b = font.render(m.karlineb[iline], 0, base_text_color)
-        rect_a = screen.blit(line_a, [x0a, 80 + iline * 60])
-        x0b = x0a + rect_a.width
-        rect_b = screen.blit(line_b, [x0b, 80 + iline * 60])
+        pygame.display.flip()
+        screen.fill(0)
 
-    pygame.display.flip()
-    screen.fill(0)
+        time.sleep(0.1)
 
-    time.sleep(0.1)
-
-# Cleanup
-timidity_proc.terminate()
-aplay_proc.terminate()
-pygame.quit()
+finally:
+    pygame.quit()
+    # Cleanup temp WAV file
+    if os.path.exists(tmp_wav):
+        os.remove(tmp_wav)

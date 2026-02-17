@@ -174,6 +174,7 @@ class midifile:
         while read > 0b10000000:
             byte_data = self.fileobject.read(1)
             if not byte_data:
+                print("BRRRRRRRR")
                 return [0, 1, b""]
             read = struct.unpack(">B", byte_data)[0]
             values.append(read)
@@ -309,8 +310,7 @@ class midifile:
                         self.bpm.append([self.bpm[-1][0], mastertime])
 
                     if metatype == 0x1:
-                        # sometimes, there are trailing characters like " tm"
-                        if "@KMIDI KARAOKE FILE" in data:
+                        if "@KMIDI KARAOKE" in data or "@KMIDI KARAOKR" in data:
                             self.karfile = True
                             self.kartrack = itrack + 1
                         if self.karfile and itrack == self.kartrack:
@@ -406,18 +406,19 @@ class midifile:
 
         return self.error
 
-    def update_karaoke(self, dt):
+    def update_karaoke(self, dt, time_scale=1.0):
         if not self.karfile or self.kartrack == 0 or len(self.karsyl) == 0:
             return
 
         if self.karidx >= len(self.karsyl) - 1:
             return
 
-        dt0 = self.kartimes[self.karidx]
+        # Scale the kartimes to match actual playback speed
+        dt0 = self.kartimes[self.karidx] * time_scale
 
         while dt > dt0 and self.karidx < len(self.kartimes) - 1:
             self.karidx = self.karidx + 1
-            dt0 = self.kartimes[self.karidx]
+            dt0 = self.kartimes[self.karidx] * time_scale
 
         self.karidx = max(self.karidx - 1, 0)
 
