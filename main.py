@@ -2,9 +2,9 @@
 
 # This example shows how to use pygame to build a graphic frontend for
 #  a karaoke application.
-# Requires: pygame.
+# Requires: pygame, timidity++ (for MIDI playback)
 
-import midifile, time, datetime, sys
+import midifile, time, datetime, sys, subprocess, os, signal
 import pygame
 
 if len(sys.argv) < 2:
@@ -29,16 +29,29 @@ base_text_color = white
 m = midifile.midifile()
 m.load_file(karaoke_file)
 
-pygame.mixer.init()
-pygame.mixer.music.load(karaoke_file)
-pygame.mixer.music.play(0, 0)  # Start song at 0 and don't loop
-start = datetime.datetime.now()
+# Start timidity subprocess for MIDI playback
+# This handles .kar files that fluidsynth can't play
+timidity_proc = subprocess.Popen(
+    ["timidity", "-Ow", "-o", "-", karaoke_file],
+    stdout=subprocess.PIPE,
+    stderr=subprocess.DEVNULL,
+    bufsize=0,
+)
 
+# Give timidity a moment to start producing audio
+time.sleep(0.5)
+
+# Play the piped audio through aplay (PulseAudio compatible)
+aplay_proc = subprocess.Popen(
+    ["aplay", "-"], stdin=timidity_proc.stdout, stderr=subprocess.DEVNULL
+)
+
+start = datetime.datetime.now()
 done = False
 
 if not m.karfile:
     print("This is not a karaoke file. I'll just play it")
-    while pygame.mixer.music.get_busy():
+    while timidity_proc.poll() is None:
         time.sleep(1)
     sys.exit(0)
 
@@ -46,8 +59,7 @@ start = start - datetime.timedelta(0, 9)  # To start lyrics at a later point
 dt = 0.0
 
 # Main event loop
-while pygame.mixer.music.get_busy() and not done:
-
+while timidity_proc.poll() is None and not done:
     # todo: space to pause
 
     for event in pygame.event.get():
@@ -71,4 +83,7 @@ while pygame.mixer.music.get_busy() and not done:
 
     time.sleep(0.1)
 
+# Cleanup
+timidity_proc.terminate()
+aplay_proc.terminate()
 pygame.quit()
