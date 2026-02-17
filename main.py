@@ -11,20 +11,26 @@ try:
     # for Python2
     import Tkinter as tk
     import tkFileDialog as filedialog
+
     root = tk.Tk()
     root.withdraw()
 except ImportError:
     # for Python3
     from tkinter import *
     from tkinter import filedialog
+
     root = tk.Tk()
     root.withdraw()
 
-karaoke_file = ''
+karaoke_file = ""
+
 
 def open_file_dialog():
     global karaoke_file
-    karaoke_file = filedialog.askopenfilename(filetypes=(("Karaoke Files", ".kar .midi"), ("All Files", "*.*")))
+    karaoke_file = filedialog.askopenfilename(
+        filetypes=(("Karaoke Files", ".kar .midi"), ("All Files", "*.*"))
+    )
+
 
 open_file_dialog()
 
@@ -55,13 +61,13 @@ start = datetime.datetime.now()
 done = False
 
 if not m.karfile:
-    print "This is not a karaoke file. I'll just play it"
+    print("This is not a karaoke file. I'll just play it")
     while pygame.mixer.music.get_busy():
         time.sleep(1)
     sys.exit(0)
 
 start = start - datetime.timedelta(0, 9)  # To start lyrics at a later point
-dt = 0.
+dt = 0.0
 
 # Main event loop
 while pygame.mixer.music.get_busy() and not done:
@@ -77,7 +83,7 @@ while pygame.mixer.music.get_busy() and not done:
 
     for iline in range(3):
         l = font.size(m.karlinea[iline] + m.karlineb[iline])[0]
-        x0a = screenx / 2 - l / 2.
+        x0a = screenx / 2 - l / 2.0
         line_a = font.render(m.karlinea[iline], 0, active_text_color)
         line_b = font.render(m.karlineb[iline], 0, base_text_color)
         rect_a = screen.blit(line_a, [x0a, 80 + iline * 60])
@@ -87,6 +93,6 @@ while pygame.mixer.music.get_busy() and not done:
     pygame.display.flip()
     screen.fill(0)
 
-    time.sleep(.1)
+    time.sleep(0.1)
 
 pygame.quit()
